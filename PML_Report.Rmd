@@ -1,0 +1,101 @@
+---
+title: "PML_Report"
+author: "Yiyang Kang"
+date: "2020/9/21"
+output:
+  html_document: default
+  pdf_document: default
+---
+# Synopsis
+This study utilized dataset of Human Activity Recognition.Three different machine learning methods were tried with cross validation, namely Random Forest, Bagging and Boosting. Random Forest model provide the best accuracy, so it is further applied in the final test dataset.
+
+# Loading Library
+```{r}
+library(caret)
+library(ggplot2)
+library(dplyr)
+library(corrplot)
+library(randomForest)
+library(e1071)
+```
+
+# Downloading the Dataset
+```{r,cache=T}
+urlTrain <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+urlTest <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+download.file(urlTrain,destfile='./training.csv')
+download.file(urlTest,destfile='./testing.csv')
+
+train<-read.csv('./training.csv',header=T,na.string=c('NA',''))
+test<-read.csv('./testing.csv',header=T)
+```
+
+# Pre-processing and Explotory Analysis
+```{r}
+str(train$classe)
+train$classe<-as.factor(train$classe)
+
+# Removing variables with more than 95% NAs
+train1 <- train %>% select(8:160)
+nabar<-dim(train1)[1]*0.95
+train2<- train1 %>% select_if(colSums(is.na(train1)) < nabar) 
+
+# Explortory analysis
+corMatrix <- cor(train2[,-53])
+cp<-corrplot(corMatrix, order = "FPC", method = "color", type = "lower", 
+         tl.cex = 0.8, tl.col = rgb(0, 0, 0))
+
+# Slicing data into training set and testing set
+set.seed(1000)
+inTrain<-createDataPartition(train2$classe,p=0.7,list=F)
+trainSet<-train2[inTrain,]
+testSet<-train2[-inTrain,]
+```
+The variables correlation are : `{r cp}`
+As the figure is shown, most variables are not correlated. So it is safe to use these independent variables for the machine learning process. 
+
+
+# Trying different machine learning methods
+With cross validation, three different machine learning methods were tried, namely Random Forest, Bagging and Decision Tree. The Results are as follow.
+
+## Random Forest
+```{r, cache=T}
+set.seed(1000)
+trconRF<-trainControl(method='cv',number=3,verboseIter=F)
+modelRF<-train(classe~.,data=trainSet,method='rf',trControl=trconRF)
+modelRF$finalModel
+
+predRF<-predict(modelRF,newdata=testSet)
+confusionMatrix(predRF,testSet$classe)
+```
+
+## Bagging
+```{r,cache=T}
+set.seed(1000)
+trconBG<-trainControl(method='cv',number=3,verboseIter=F)
+modelBG<-train(classe~.,data=trainSet,method='treebag',trControl=trconBG)
+modelBG$finalModel
+
+predBG<-predict(modelBG,newdata=testSet)
+confusionMatrix(predBG,testSet$classe)
+```
+
+## Boosting
+```{r,cache=T}
+set.seed(1000)
+trconDT<-trainControl(method='cv',number=3,verboseIter=F)
+modelDT<-train(classe~.,data=trainSet,method='gbm',trControl=trconBG)
+modelDT$finalModel
+
+predDT<-predict(modelDT,newdata=testSet)
+confusionMatrix(predDT,testSet$classe)
+```
+
+# Apply the best method in test dataset(20obs)
+The above method that provide the best accuracy was **Random Forest**. Therefore, Random Forest model was then applied for the final test dataset (with 20obs).
+```{r}
+predFinal<-predict(modelRF,newdata=test)
+predFinal
+```
+
+
